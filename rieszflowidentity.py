@@ -7,7 +7,7 @@ pygame.init()
 # Screen dimensions and settings
 width, height = 800, 400
 screen = pygame.display.set_mode((width, height))
-pygame.display.set_caption("Generic Minimization of Riesz s-Energy with Axis Labels")
+pygame.display.set_caption("Minimizing Riesz s-Energy with Normalized Axis Scaling")
 
 # Colors
 white = (255, 255, 255)
@@ -31,16 +31,20 @@ x_points = np.random.uniform(0, 1, (num_points, 2))
 pygame.font.init()
 font = pygame.font.SysFont("Arial", 12)
 
+
 # Define the identity transformation functions
 def f1(p1, p2):
     return p1
 
+
 def f2(p1, p2):
     return p2
+
 
 # Define the Jacobian matrix for the identity transformation
 def jacobian_matrix(p1, p2):
     return np.array([[1, 0], [0, 1]])
+
 
 # Compute Riesz s-Energy in (y1, y2) space
 def riesz_s_energy(y_points, s):
@@ -52,7 +56,8 @@ def riesz_s_energy(y_points, s):
                 energy += 1 / (dist ** s)
     return energy
 
-# Compute the negative gradient of Riesz s-Energy for each point in (y1, y2)
+
+# Compute the normalized negative gradient of Riesz s-Energy for each point in (y1, y2)
 def riesz_s_energy_gradient(y_points, s):
     grad_y = np.zeros_like(y_points)
     for i in range(len(y_points)):
@@ -63,7 +68,13 @@ def riesz_s_energy_gradient(y_points, s):
                 if dist != 0:
                     # Negative gradient for minimization, plus a small repulsive force
                     grad_y[i] -= (s * diff / (dist ** (s + 2))) - repulsive_strength * diff / (dist ** 2)
-    return grad_y
+
+    # Normalize the gradients
+    norms = np.linalg.norm(grad_y, axis=1, keepdims=True)
+    norms[norms == 0] = 1  # Avoid division by zero for zero gradients
+    grad_y_normalized = grad_y / norms
+    return grad_y_normalized
+
 
 # Project gradient from (y1, y2) to (x1, x2) using the Jacobian
 def project_gradient_to_x(points, grad_y):
@@ -73,15 +84,18 @@ def project_gradient_to_x(points, grad_y):
         grad_x[i] = jacobian @ grad_y[i]  # Apply the Jacobian (identity here)
     return grad_x
 
+
 # Scaling functions to fit the unit square [0,1] to screen coordinates
 def scale_x(x, left=True):
     if left:
-        return int(padding + x * (width / 4 - padding))
+        return int(padding + x * (width / 2 - 2 * padding))
     else:
-        return int(width / 2 + padding + x * (width / 4 - padding))
+        return int(width / 2 + padding + x * (width / 2 - 2 * padding))
+
 
 def scale_y(y):
     return int(height - (padding + y * (height - 2 * padding)))
+
 
 # Function to render axis labels
 def draw_axis_labels():
@@ -111,6 +125,7 @@ def draw_axis_labels():
         y = scale_y(label_value)
         screen.blit(label_y, (x, y - 5))
 
+
 # Main loop
 running = True
 clock = pygame.time.Clock()
@@ -118,13 +133,13 @@ while running:
     # Map points to (y1, y2) space using the identity functions
     y_points = np.array([[f1(p[0], p[1]), f2(p[0], p[1])] for p in x_points])
 
-    # Compute the negative gradient of the Riesz s-Energy in (y1, y2) space
+    # Compute the normalized negative gradient of the Riesz s-Energy in (y1, y2) space
     grad_y = riesz_s_energy_gradient(y_points, s)
 
     # Project the negative gradient from (y1, y2) to (x1, x2) using the Jacobian
     grad_x = project_gradient_to_x(x_points, grad_y)
 
-    # Update points based on the negative projected gradient
+    # Update points based on the normalized negative projected gradient
     x_points -= learning_rate * grad_x  # Move points in the negative gradient direction
 
     # Ensure points stay within bounds [0, 1] for both x1 and x2
