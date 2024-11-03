@@ -20,7 +20,7 @@ gray = (200, 200, 200)
 num_points = 6  # k=6 points
 radius = 5
 padding = 50
-learning_rate = 0.005  # Reduced learning rate for smoother adjustments
+learning_rate = 0.05  # Reduced learning rate for smoother adjustments
 s = 1  # Exponent for Riesz s-Energy
 repulsive_strength = 0.1  # Small repulsive force to prevent clumping
 
