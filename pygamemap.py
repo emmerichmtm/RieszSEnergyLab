@@ -1,81 +1,118 @@
-import numpy as np
 import pygame
+import numpy as np
 
 # Initialize Pygame
 pygame.init()
 
-# Parameters
+# Screen dimensions and settings
 width, height = 800, 400
 screen = pygame.display.set_mode((width, height))
-pygame.display.set_caption("Riesz S-Energy Gradient Descent")
+pygame.display.set_caption("Gradient-based Random Walk")
 
 # Colors
 white = (255, 255, 255)
 black = (0, 0, 0)
 blue = (0, 0, 255)
+red = (255, 0, 0)
+gray = (200, 200, 200)
 
-# Parameters for Riesz s-Energy
-s = 2  # Exponent in the Riesz s-Energy
+# Parameters
 num_points = 6
-learning_rate = 0.005
-padding = 50  # Padding for coordinate system boundaries
+radius = 5
+padding = 50
+learning_rate = 0.01  # Step size for random walk
 
-# Generate random points in the unit square
-points = np.random.uniform(0, 1, (num_points, 2))
-
-
-# Function to calculate Riesz s-Energy
-def riesz_s_energy(points, s):
-    energy = 0
-    for i in range(len(points)):
-        for j in range(i + 1, len(points)):
-            dist = np.linalg.norm(points[i] - points[j])
-            if dist != 0:
-                energy += 1 / (dist ** s)
-    return energy
+# Initialize random points in the range [0, 1] for (x1, x2)
+x_points = np.random.uniform(0, 1, (num_points, 2))
 
 
-# Function to compute the gradient of Riesz s-Energy
-def riesz_s_energy_gradient(points, s):
-    grad = np.zeros_like(points)
-    for i in range(len(points)):
-        for j in range(len(points)):
-            if i != j:
-                diff = points[i] - points[j]
-                dist = np.linalg.norm(diff)
-                if dist != 0:
-                    grad[i] += (s * diff) / (dist ** (s + 2))
-    return grad
+# Define transformation functions
+def f1(p1, p2):
+    return p1 ** 2 + p2 ** 2
 
 
-# Function to compute the Jacobian for the set (simplified as identity matrix in this case)
-def compute_jacobian(points):
-    # Assuming an identity Jacobian for simplicity here; customize as needed for specific mappings
-    return np.eye(2)
+def f2(p1, p2):
+    return (p1 - 1) ** 2 + (p2 - 1) ** 2
+
+
+# Define gradient functions
+def grad_f1(p1, p2):
+    return np.array([2 * p1, 2 * p2])
+
+
+def grad_f2(p1, p2):
+    return np.array([2 * (p1 - 1), 2 * (p2 - 1)])
+
+
+# Scaling functions to fit the unit square [0,1] to screen coordinates
+def scale_x(x, left=True):
+    if left:
+        return int(padding + x * (width / 4 - padding))
+    else:
+        return int(width / 2 + padding + x * (width / 4 - padding))
+
+
+def scale_y(y):
+    return int(height - (padding + y * (height - 2 * padding)))
 
 
 # Main loop
 running = True
 clock = pygame.time.Clock()
 while running:
-    # Compute the gradient of the Riesz s-Energy
-    gradient = riesz_s_energy_gradient(points, s)
+    # Randomly change weights (w1, w2) over time
+    w1, w2 = np.random.uniform(0.5, 1.5, 2)
 
-    # Apply the Jacobian to the gradient (here, assuming an identity Jacobian for simplicity)
+    # Update each point based on the gradient
     for i in range(num_points):
-        jacobian = compute_jacobian(points[i])
-        movement = jacobian @ gradient[i]  # Matrix multiplication with the Jacobian
-        points[i] -= learning_rate * movement  # Move point based on gradient
+        p1, p2 = x_points[i]
 
-    # Keep points within the bounds [0, 1]
-    points = np.clip(points, 0, 1)
+        # Compute the weighted gradient of w1*f1 + w2*f2
+        grad = w1 * grad_f1(p1, p2) + w2 * grad_f2(p1, p2)
 
-    # Draw everything
+        # Update point position with a small step in the direction of the gradient
+        x_points[i] = x_points[i] - learning_rate * grad
+
+        # Ensure points stay within bounds [0, 1] (clipping)
+        x_points[i] = np.clip(x_points[i], 0, 1)
+
+    # Map updated points using f1 and f2
+    y_points = np.array([[f1(p[0], p[1]), f2(p[0], p[1])] for p in x_points])
+
+    # Drawing
     screen.fill(white)
-    for i, point in enumerate(points):
-        x_pos = int(padding + point[0] * (width / 2 - padding))
-        y_pos = int(height - (padding + point[1] * (height - 2 * padding)))
-        pygame.draw.circle(screen, blue, (x_pos, y_pos), 5)
+
+    # Draw coordinate axes for the left plot (x1, x2)
+    pygame.draw.line(screen, gray, (padding, height - padding), (width / 2 - padding, height - padding), 1)
+    pygame.draw.line(screen, gray, (padding, padding), (padding, height - padding), 1)
+
+    # Draw coordinate axes for the right plot (y1, y2)
+    pygame.draw.line(screen, gray, (width / 2 + padding, height - padding), (width - padding, height - padding), 1)
+    pygame.draw.line(screen, gray, (width / 2 + padding, padding), (width / 2 + padding, height - padding), 1)
+
+    # Draw original points (x1, x2) on the left side
+    for i, (p1, p2) in enumerate(x_points):
+        x_pos = scale_x(p1, left=True)
+        y_pos = scale_y(p2)
+
+        pygame.draw.circle(screen, blue, (x_pos, y_pos), radius)
+
+    # Draw mapped points (y1, y2) on the right side
+    for i, (q1, q2) in enumerate(y_points):
+        x_pos = scale_x(q1, left=False)
+        y_pos = scale_y(q2)
+
+        pygame.draw.circle(screen, red, (x_pos, y_pos), radius)
+
+    # Draw lines connecting each (p1, p2) to (q1, q2)
+    for i in range(num_points):
+        p1, p2 = x_points[i]
+        q1, q2 = y_points[i]
+
+        start_pos = (scale_x(p1, left=True), scale_y(p2))
+        end_pos = (scale_x(q1, left=False), scale_y(q2))
+
+        pygame.draw.line(screen, black, start_pos, end_pos, 1)
 
     # Handle events
     for event in pygame.event.get():
@@ -83,6 +120,7 @@ while running:
             running = False
 
     pygame.display.flip()
-    clock.tick(30)
+    clock.tick(30)  # Control the frame rate
 
+# Quit Pygame
 pygame.quit()
